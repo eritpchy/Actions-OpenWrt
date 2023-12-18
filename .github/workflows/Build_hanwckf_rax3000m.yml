@@ -36,6 +36,7 @@ jobs:
         echo -e "Total CPU cores\t: $(nproc)"
         cat /proc/cpuinfo | grep 'model name'
         ulimit -a
+
     - name: Maximize build space
       uses: easimon/maximize-build-space@master
       with:
@@ -46,6 +47,7 @@ jobs:
         remove-android: 'true'
         remove-haskell: 'true'
         remove-codeql: 'true'
+
     - name: Checkout
       uses: actions/checkout@main
     - name: Init build dependencies
@@ -73,6 +75,7 @@ jobs:
         chmod +x $DIY_P1_SH
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P1_SH
+
     - name: Update feeds
       run: cd openwrt && ./scripts/feeds update -a
 
@@ -86,20 +89,20 @@ jobs:
         chmod +x $DIY_P2_SH
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P2_SH
-   
-    - name: SSH connection to Actions
-      uses: P3TERX/ssh2actions@v1.0.0
+
+    - name: Start SSH via tmate
+      uses: P3TERX/ssh2actions@main
       if: (github.event.inputs.ssh == 'true' && github.event.inputs.ssh  != 'false') || contains(github.event.action, 'ssh')
       env:
-        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }} 
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}   
 
     - name: Download package
       id: package
       run: |
         cd openwrt
         make defconfig
-        make download -j8
+        make download -j$(nproc)
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
     - name: Compile the firmware
@@ -108,9 +111,11 @@ jobs:
         cd openwrt
         echo -e "$(nproc) thread compile"
         make -j$(nproc) || make -j1 || make -j1 V=s
+
     - name: Check space usage
       if: (!cancelled())
       run: df -hT
+
     - name: Organize files
       id: organize
       if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
@@ -124,6 +129,7 @@ jobs:
         echo "FIRMWARE=$PWD" >> $GITHUB_ENV
         echo "TAG_NAME=$(date +"%Y.%m.%d-${CONFIG_FILE%%.*}-$(echo $CONFIG_FILE | cut -d "." -f2)")" >> $GITHUB_ENV
         echo "status=success" >> $GITHUB_OUTPUT
+
     - name: Upload firmware directory
       uses: actions/upload-artifact@main
       if: steps.organize.outputs.status == 'success' && !cancelled()
