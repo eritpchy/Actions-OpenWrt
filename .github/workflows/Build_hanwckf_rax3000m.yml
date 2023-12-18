@@ -50,6 +50,7 @@ jobs:
 
     - name: Checkout
       uses: actions/checkout@main
+
     - name: Init build dependencies
       env:
         DEBIAN_FRONTEND: noninteractive
@@ -65,10 +66,12 @@ jobs:
         sudo -E apt-get -qq autoremove --purge
         sudo -E apt-get -qq clean
         sudo timedatectl set-timezone "$TZ"
+
     - name: Clone source code
       run: |
         df -hT $PWD
         git clone $REPO_URL -b $REPO_BRANCH $GITHUB_WORKSPACE/openwrt
+
     - name: Load custom feeds
       run: |
         [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
@@ -91,8 +94,8 @@ jobs:
         $GITHUB_WORKSPACE/$DIY_P2_SH
 
     - name: Start SSH via tmate
-      uses: P3TERX/ssh2actions@main
       if: (github.event.inputs.ssh == 'true' && github.event.inputs.ssh  != 'false') || contains(github.event.action, 'ssh')
+      uses: P3TERX/ssh2actions@main
       env:
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}   
@@ -105,6 +108,7 @@ jobs:
         make download -j$(nproc)
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
+
     - name: Compile the firmware
       id: compile
       run: |
@@ -117,8 +121,8 @@ jobs:
       run: df -hT
 
     - name: Organize files
+      if: (!cancelled())
       id: organize
-      if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
       run: |
         cd openwrt/bin/targets/*/*
         rm -rf packages
@@ -131,15 +135,16 @@ jobs:
         echo "status=success" >> $GITHUB_OUTPUT
 
     - name: Upload firmware directory
-      uses: actions/upload-artifact@main
       if: steps.organize.outputs.status == 'success' && !cancelled()
+      uses: actions/upload-artifact@main
       with:
         name: OpenWrt_firmware
         path: ${{ env.FIRMWARE }}
+
     - name: Upload firmware to release
+      if: (!cancelled())
       id: create_release
       uses: ncipollo/release-action@v1.12.0
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
       with:
         name: ${{ env.TAG_NAME }}
         allowUpdates: true
@@ -149,12 +154,14 @@ jobs:
         artifacts: ${{ env.FIRMWARE }}/*
 
     - name: Delete workflow runs
+      if: (!cancelled())
       uses: Mattraks/delete-workflow-runs@main
       with:
         retain_days: 1
         keep_minimum_runs: 3
 
     - name: Remove old Releases
+      if: (!cancelled())
       uses: dev-drprasad/delete-older-releases@v0.3.2
       if: env.UPLOAD_RELEASE == 'true' && !cancelled()
       with:
